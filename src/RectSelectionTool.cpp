@@ -1,5 +1,3 @@
-#pragma once
-
 #include "RectSelectionTool.hpp"
 
 RectSelectionTool* RectSelectionTool::create() {

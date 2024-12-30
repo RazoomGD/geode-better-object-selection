@@ -44,32 +44,56 @@ void BasicSelectionTool::drawPolygon(CloseOption closeOption) {
 } 
 
 
-// get rectangle for NOT SCALED NOR ROTATED NOR FLIPPED object
+// get rectangle of NOT ROTATED NOR FLIPPED object
 // (decompiled + fixed + rewritten version of LevelEditorLayer::getObjectRect)
 std::array<CCPoint, 4> getNotTransformedObjectBox(GameObject* gameObj) {
 	CCRect rect;
 	CCPoint posOffset;
     CCSize size;
+
+    LevelEditorLayer::get()->__pad1378[1] = 0x0; // original function does this
+    std::string path; // todo: remove this
+
     // get size
     if (gameObj->m_unk4ad == false) {
         if (gameObj->m_unk4ac == true) {
+            // reset rotation to fix bug with quarter objects (like rainbows)
+            float rotX = gameObj->getRotationX();
+            float rotY = gameObj->getRotationY();
+            gameObj->setRotationX(0);
+            gameObj->setRotationY(0);
             rect = gameObj->getObjectRect();
+            gameObj->setRotationX(rotX);
+            gameObj->setRotationY(rotY);
+            path += "1";
 			goto m1;
         }
         if (gameObj->m_unk4F8 == false && (gameObj->m_colorSprite != nullptr || gameObj->m_hasCustomChild == true || gameObj->m_unk367 == true)) {
             size = gameObj->getContentSize();
+            path += "2";
 		} else {
-			size = gameObj->getContentSize() - gameObj->getOffsetPosition();
+            size = gameObj->getTextureRect().size; // gameObj + 0x36
+            path += "3";
         }
     } else {
 		size = gameObj->m_unk4b0;
+        path += "4";
     }
+    size.width *= gameObj->getScaleX();
+    size.height *= gameObj->getScaleY();
+    
 	// get offset
-	posOffset = ccp(0,0);
     if ((gameObj->m_colorSprite == nullptr && gameObj->m_hasCustomChild == false) || gameObj->m_unk4F8 == true) {
-		posOffset = *(CCPoint *)((long long)gameObj + 0x1c4); // todo
+		// posOffset = *(CCPoint *)((long long)gameObj + 0x1c4);
+        posOffset = gameObj->getUnflippedOffsetPosition();
+        posOffset.x *= gameObj->getScaleX();
+        posOffset.y *= gameObj->getScaleY();
+        path += "5";
+    } else {
+        posOffset = ccp(0,0);
+        path += "6";
     }
-    rect.origin = posOffset + gameObj->getPosition() - size * 0.5f;
+    rect.origin = gameObj->getPosition() + posOffset - size * 0.5f;
 	rect.size = size;
 
 m1: 
@@ -79,14 +103,13 @@ m1:
 	    rect.origin + rect.size,
 	    rect.origin + ccp(0, rect.size.height),
     };
+    // log::debug("path = {}", path);
 	return ret;
 }
 
 std::array<CCPoint, 4> getTransformedObjectBox(GameObject* obj) {
 	auto rotX = obj->getRotationX();
 	auto rotY = obj->getRotationY();
-	auto scaleX = obj->getScaleX();
-	auto scaleY = obj->getScaleY();
 
     auto ret = getNotTransformedObjectBox(obj);
 	
@@ -100,8 +123,6 @@ std::array<CCPoint, 4> getTransformedObjectBox(GameObject* obj) {
 	for (int i = 0; i < 4; i++) {
 		auto point = ret[i];
 		point -= center;
-		point.x *= scaleX;
-		point.y *= scaleY;
 		float px = point.x;
 		point.x = (point.x * cosY + point.y * sinX);
 		point.y = (point.y * cosX - px * sinY);

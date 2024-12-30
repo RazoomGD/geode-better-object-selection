@@ -5,6 +5,7 @@
 class CircleSelectionTool : public BasicSelectionTool {
 protected:
     const int m_pointLimit = 50;
+    CCPoint m_startPoint;
 
 public:
     static CircleSelectionTool* create();

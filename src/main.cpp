@@ -17,8 +17,9 @@
 
 class MyObj : public GameObject {
 public:
-	CCSize getMyVal() {
-		return m_obContentSize;
+	CCSize getOffset36Value() {
+		log::debug("offset field = {}", (uint64_t) (&(m_obRect.size)) - (uint64_t)this);
+		return m_obRect.size;
 	}
 };
 
@@ -169,7 +170,6 @@ class $modify(MyEditorUI, EditorUI) {
 		EditorUI::ccTouchEnded(p0, p1);
 	}
 
-	$override
 	void onModeButton(CCObject* sender) {
 		auto btn = static_cast<CCNodeRGBA*>(sender);
 		auto mode = (SelMode) btn->getTag(); // tag is mode
@@ -216,15 +216,18 @@ class $modify(MyEditorUI, EditorUI) {
 		if (!this->getSelectedObjects() || this->getSelectedObjects()->count() == 0) return;
 		auto selected = this->getSelectedObjects();
 		auto obj = static_cast<GameObject*>(selected->objectAtIndex(0));
-		log::debug("size = {} --- {}", *((CCSize*) obj+0x36), obj->getContentSize());
+		// log::debug("anchor {}", obj->get);
+		// log::debug("size = {} --- {}", *((CCSize*) obj+0x36), obj->getOffsetPosition());
 
-		log::debug("size = {}", ((MyObj*) obj)->getMyVal());
-		log::debug("flip = {} --- {}", obj->getUnflippedOffsetPosition(), obj->getOffsetPosition());
-
+		// log::debug("size = {} == {}", ((MyObj*) obj)->getOffset36Value(), obj->getTextureRect().size);
+		// log::debug("flip = {} --- {}", obj->getUnflippedOffsetPosition(), obj->getOffsetPosition());
+		// auto levelLayer = LevelEditorLayer::get();
+		// log::debug("QQQQQQQqqq = {}", (uint64_t) &(levelLayer->__pad1378[1]) - (uint64_t) levelLayer);
 	}
 };
 
 std::array<CCPoint, 4> getTransformedObjectBox(GameObject* obj);
+std::array<CCPoint, 4> getNotTransformedObjectBox(GameObject* gameObj);
 
 // function for debug
 void drawDebugObjectBoxes(CCArray* objects) {
@@ -236,6 +239,36 @@ void drawDebugObjectBoxes(CCArray* objects) {
 		// function that I use for calculating precise object boxes
 		// 	auto rect = LevelEditorLayer::get()->getObjectRect(obj, 0, 0);
 		auto corners = getTransformedObjectBox(obj);
+		ccDrawLine(corners[0], corners[1]);
+		ccDrawLine(corners[1], corners[2]);
+		ccDrawLine(corners[2], corners[3]);
+		ccDrawLine(corners[3], corners[0]);
+	}
+
+	ccDrawColor4B(255,0,0,255);
+	for (int i = 0; i < objects->count(); i++) {
+		auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
+		// function that I use for calculating precise object boxes
+		auto rect = LevelEditorLayer::get()->getObjectRect(obj, 0, 0);
+		std::array<CCPoint, 4> corners = {
+			rect.origin,
+			rect.origin + ccp(rect.size.width, 0),
+			rect.origin + rect.size,
+			rect.origin + ccp(0, rect.size.height),
+		};
+		// auto corners = getTransformedObjectBox(obj);
+		ccDrawLine(corners[0], corners[1]);
+		ccDrawLine(corners[1], corners[2]);
+		ccDrawLine(corners[2], corners[3]);
+		ccDrawLine(corners[3], corners[0]);
+	}
+
+	ccDrawColor4B(255,255,0,255);
+	for (int i = 0; i < objects->count(); i++) {
+		auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
+		// function that I use for calculating precise object boxes
+		// 	auto rect = LevelEditorLayer::get()->getObjectRect(obj, 0, 0);
+		auto corners = getNotTransformedObjectBox(obj);
 		ccDrawLine(corners[0], corners[1]);
 		ccDrawLine(corners[1], corners[2]);
 		ccDrawLine(corners[2], corners[3]);
