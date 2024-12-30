@@ -43,27 +43,53 @@ void BasicSelectionTool::drawPolygon(CloseOption closeOption) {
     }
 } 
 
+
+// get rectangle for NOT SCALED NOR ROTATED NOR FLIPPED object
+// (decompiled + fixed + rewritten version of LevelEditorLayer::getObjectRect)
+std::array<CCPoint, 4> getNotTransformedObjectBox(GameObject* gameObj) {
+	CCRect rect;
+	CCPoint posOffset;
+    CCSize size;
+    // get size
+    if (gameObj->m_unk4ad == false) {
+        if (gameObj->m_unk4ac == true) {
+            rect = gameObj->getObjectRect();
+			goto m1;
+        }
+        if (gameObj->m_unk4F8 == false && (gameObj->m_colorSprite != nullptr || gameObj->m_hasCustomChild == true || gameObj->m_unk367 == true)) {
+            size = gameObj->getContentSize();
+		} else {
+			size = gameObj->getContentSize() - gameObj->getOffsetPosition();
+        }
+    } else {
+		size = gameObj->m_unk4b0;
+    }
+	// get offset
+	posOffset = ccp(0,0);
+    if ((gameObj->m_colorSprite == nullptr && gameObj->m_hasCustomChild == false) || gameObj->m_unk4F8 == true) {
+		posOffset = *(CCPoint *)((long long)gameObj + 0x1c4); // todo
+    }
+    rect.origin = posOffset + gameObj->getPosition() - size * 0.5f;
+	rect.size = size;
+
+m1: 
+	std::array<CCPoint, 4> ret = {
+	    rect.origin,
+	    rect.origin + ccp(rect.size.width, 0),
+	    rect.origin + rect.size,
+	    rect.origin + ccp(0, rect.size.height),
+    };
+	return ret;
+}
+
 std::array<CCPoint, 4> getTransformedObjectBox(GameObject* obj) {
 	auto rotX = obj->getRotationX();
 	auto rotY = obj->getRotationY();
 	auto scaleX = obj->getScaleX();
 	auto scaleY = obj->getScaleY();
-	obj->setRotation(0); // rotation is bugged in RobTop's function
-    obj->setScaleX(scaleX > 0 ? 1 : -1); // scale is bugged in RobTop's function as well
-    obj->setScaleY(scaleY > 0 ? 1 : -1);
-	auto box = LevelEditorLayer::get()->getObjectRect(obj, 0, 0);
-	obj->setRotationX(rotX);
-	obj->setRotationY(rotY);
-	obj->setScaleX(scaleX);
-	obj->setScaleY(scaleY);
-	
-	std::array<CCPoint, 4> ret = {
-		box.origin,
-		box.origin + ccp(box.size.width, 0),
-		box.origin + box.size,
-		box.origin + ccp(0, box.size.height)
-	};
 
+    auto ret = getNotTransformedObjectBox(obj);
+	
 	auto center = obj->getPosition();
 
 	double cosX = std::cos(rotX*M_PI/180);
@@ -118,7 +144,7 @@ bool segmentsIntersect(CCPoint start1, CCPoint end1, CCPoint start2, CCPoint end
 bool preciseBoxCheck(std::vector<CCPoint>* polygon, std::array<CCPoint, 4>* objBox) {
     if (polygon->size() <= 1) return false;
 
-    // check edges
+    // check edges intersections
     CCPoint a, b;
     bool areIntersect = false;
     b = polygon->at(polygon->size()-1); // last
@@ -163,7 +189,7 @@ bool preciseBoxCheck(std::vector<CCPoint>* polygon, std::array<CCPoint, 4>* objB
 }
 
 
-// REQUIREMENTS LIST FOR THIS FUNCTION:
+// REQUIREMENTS FOR THIS FUNCTION:
 // groupId filter - works
 // custom filter - works
 // static/details filter - deferred (not in vanilla)
@@ -193,10 +219,10 @@ void BasicSelectionTool::applySelection() {
 
     // get objects in selection bounding box
     auto allObjects = levelLayer->m_objects;
-    auto objectsInBox = CCArray::create();
+    auto objectsInPolygon = CCArray::create();
+    auto selectedBefore = CCSet::create();
     const short currLayer = levelLayer->m_currentLayer;
 
-    auto selectedBefore = CCSet::create();
     if (auto selObjects = editor->getSelectedObjects()) {
         for (int i = 0; i < selObjects->count(); i++) {
             selectedBefore->addObject(selObjects->objectAtIndex(i));
@@ -205,7 +231,7 @@ void BasicSelectionTool::applySelection() {
 
     for (int i = 0; i < allObjects->count(); i++) {
         auto obj = static_cast<GameObject*>(allObjects->objectAtIndex(i));
-
+        /*
         // check editor layer
         if (currLayer != -1 && currLayer != obj->m_editorLayer && currLayer != obj->m_editorLayer2) {
             continue;
@@ -229,28 +255,27 @@ void BasicSelectionTool::applySelection() {
         if (selectedBefore->containsObject(obj)) {
             continue;
         }
-
+        */
         // precisely check object box
         auto objBox = getTransformedObjectBox(obj);
         if (preciseBoxCheck(&m_points, &objBox)) {
-            objectsInBox->addObject(obj);
+            objectsInPolygon->addObject(obj);
         }
     }
 
     // select objects in box, create undo objects and update interface
-    if (objectsInBox->count()) {
+    if (objectsInPolygon->count()) {
         auto undoObj = UndoObject::createWithArray(editor->getSelectedObjects(), UndoCommand::Select);
         undoObj->m_redo = false;
         levelLayer->m_undoObjects->addObject(undoObj);
         levelLayer->m_redoObjects->removeAllObjects();
-        // todo: check for previously selected objects
 
         int maxUndoRedo = levelLayer->m_increaseMaxUndoRedo ? 1000 : 200;
         if (levelLayer->m_undoObjects->count() >= maxUndoRedo) {
             levelLayer->m_undoObjects->removeObjectAtIndex(0);
         }
 
-        editor->selectObjects(objectsInBox, false); // 2nd arg is ignoreSelectFilter
+        editor->selectObjects(objectsInPolygon, false); // 2nd arg is ignoreSelectFilter
 
         editor->updateButtons();
         editor->updateObjectInfoLabel();
@@ -259,125 +284,8 @@ void BasicSelectionTool::applySelection() {
         editor->deactivateTransformControl();
         
     }
+}
 
-}
-/*
-// decompiled function
-CCRect * FUN_1402c1df0(LevelEditorLayer* levelLayer,CCRect *retRect, GameObject *gameObj) {
-    CCSize tmpSize;
-    CCRect *pCVar1;
-    long long lVar2;
-    CCNode* lVar3;
-    undefined8 uVar4;
-    CCPoint *pCVar5;
-    float *pfVar6;
-    float fVar7;
-    float objRScaleX;
-    float objRScaleY;
-    unsigned uVar8;
-    CCSize size;
-    float local_res18;
-    float local_res1c;
-    CCSize gameObjSizeCopy;
-    CCSize gameObjSize;
-    CCSize gameObjSizeCopy2;
-    CCSize sizesArr56 [0x38];
-    
-    *(levelLayer + 0x37ad) = 0x0;
-    if (gameObj->m_unk4ad == false) {
-        if (gameObj->m_unk4ac == true) {
-            *retRect = gameObj->getObjectRect();
-            return retRect;
-        }
-        if ((gameObj->m_unk4F8 == false) &&
-           (gameObj->m_colorSprite != nullptr || gameObj->m_hasCustomChild == true || gameObj->m_unk367 == true)) {
-                    // 130 - get content size
-            tmpSize = gameObj->getContentSize();
-            gameObjSizeCopy = tmpSize;
-            CCSize objContentSize = gameObj->getContentSize();
-            objRScaleY = gameObj->getRScaleY();
-            objRScaleX = gameObj->getRScaleX();
-            sizesArr56[0].width = objRScaleX * objContentSize.width;
-            sizesArr56[0].height = objRScaleY * objContentSize.height;
-            size = tmpSize;
-        }
-        else {
-            cocos2d::CCSize::operator=(&gameObjSizeCopy,gameObj + 0x36);
-                    // 518 - getRScaleY, 510 - getRScaleX
-            objRScaleY = gameObj->getRScaleY();
-            fVar7 = *(gameObj + 0x1b4);
-            objRScaleX = gameObj->getRScaleX();
-            tmpSize = CCSizeMake(objRScaleX * *(gameObj + 0x36),objRScaleY * fVar7) ;
-            size = tmpSize;
-            sizesArr56[0] = tmpSize;
-        }
-    }
-    else {
-        gameObjSize = gameObj->m_unk4b0;
-        gameObjSizeCopy = gameObjSize;
-        gameObjSizeCopy2 = gameObj->m_unk4b0;
-        fVar7 = gameObj->getRScaleY();
-        objRScaleY = gameObj->getRScaleX();
-        tmpSize = CCSizeMake(objRScaleY * gameObjSizeCopy2.width, fVar7 * gameObjSize.height);
-        sizesArr56[0] = tmpSize;
-        // cocos2d::CCSize::operator=(&size,tmpSize);
-        size = tmpSize;
-    }
-    fVar7 = 7.5;
-    if (7.5 <= size.width) {
-        fVar7 = size.width;
-    }
-    objRScaleY = 7.5;
-    if (7.5 <= size.height) {
-        objRScaleY = size.height;
-    }
-    size.width = fVar7;
-    size.height = objRScaleY;
-    cocos2d::CCPoint::CCPoint(&local_res18,&DAT_140687068);
-    if (gameObj->m_unk4ad == false) {
-        // fVar7 = (**(*gameObj + 0x158))(gameObj);
-        fVar7 = gameObj->getRotation();
-        if ((fVar7 != (fVar7 / 0x5a) * 0x5a) && (lVar3 = gameObj->getParent(), lVar3 != nullptr)) {
-            if ((gameObj->m_colorSprite == nullptr && gameObj->m_hasCustomChild == false) || gameObj->m_unk4F8 == true) {
-                cocos2d::CCPoint::operator=(&local_res18,gameObj + 0x1bc);
-            }
-            uVar4 = cocos2d::CCPoint::CCPoint(sizesArr56,gameObjSizeCopy.width * 0.5 + local_res18,gameObjSizeCopy.height * 0.5 + local_res1c);
-            cocos2d::CCNode::convertToWorldSpace(gameObj,gameObjSize,uVar4);
-            pCVar5 = cocos2d::CCNode::convertToNodeSpace(*(levelLayer + 0xfe0),sizesArr56,gameObjSize);
-            gameObjSize = *pCVar5;
-            // uVar8 = (**(*gameObj + 0x158))(gameObj);
-            uVar8 = gameObj->getRotation();
-            uVar4 = cocos2d::CCPoint::CCPoint(sizesArr56,gameObjSize);
-            // OBB2D : void calculateWithCenter(cocos2d::CCPoint, float, float, float)
-            FUN_14006c560(*(levelLayer + 0x3790),uVar4,size,size.height,(uVar8 ^ 0x80000000) * 0.01745329);
-            *(levelLayer + 0x37ad) = 0x1;
-            // OBB2D : TodoREturn getBoundingRect()
-            FUN_14006cd50(*(levelLayer + 0x3790),retRect);
-            return retRect;
-        }
-        fVar7 = size.width;
-        if (gameObj->m_isRotationAligned == true) {
-            size.width = size.height;
-            size.height = fVar7;
-        }
-    }
-    if (((gameObj->m_colorSprite == nullptr) && gameObj->m_hasCustomChild == false) || gameObj->m_unk4F8 == true) {
-        uVar4 = cocos2d::CCPoint::CCPoint(sizesArr56,gameObj + 0x1c4);
-        // GameToolbox : static TodoReturn getRelativeOffset(GameObject*, cocos2d::CCPoint)
-        // FUN_140063380(gameObjSizeCopy2,gameObj,uVar4);
-        gameObjSizeCopy2 = GameToolbox::getRelativeOffset(gameObj, uVar4); // todo: it returns ccsize
-        local_res18 = gameObjSizeCopy2.width;
-    }
-    // lVar3 = (**(*gameObj + 0xc8))(gameObj);
-    CCPoint posPoint = gameObj->getPosition();
-    objRScaleY = size.height * 0.5;
-    // fVar7 = *(lVar3 + 0x4);
-    fVar7 = posPoint.y;
-    // pfVar6 = (**(*gameObj + 0xc8))(gameObj);
-    // cocos2d::CCRect::CCRect(retRect,(local_res18 + *pfVar6) - size.width * 0.5,(fVar7 + local_res1c) - objRScaleY,size.width,size.height);
-    retRect->origin = ccp((local_res18 + posPoint.x) - size.width * 0.5,(fVar7 + local_res1c) - objRScaleY);
-    retRect->size = size;
-    return retRect;
-}
-*/
+
+
 

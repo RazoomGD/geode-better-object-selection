@@ -225,7 +225,6 @@ class $modify(MyEditorUI, EditorUI) {
 };
 
 std::array<CCPoint, 4> getTransformedObjectBox(GameObject* obj);
-std::array<CCPoint, 4> getObjOriginalRect(GameObject* obj);
 
 // function for debug
 void drawDebugObjectBoxes(CCArray* objects) {
@@ -235,19 +234,8 @@ void drawDebugObjectBoxes(CCArray* objects) {
 	for (int i = 0; i < objects->count(); i++) {
 		auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
 		// function that I use for calculating precise object boxes
+		// 	auto rect = LevelEditorLayer::get()->getObjectRect(obj, 0, 0);
 		auto corners = getTransformedObjectBox(obj);
-		ccDrawLine(corners[0], corners[1]);
-		ccDrawLine(corners[1], corners[2]);
-		ccDrawLine(corners[2], corners[3]);
-		ccDrawLine(corners[3], corners[0]);
-	}
-
-	ccDrawColor4B(255,0,0,255);
-	for (int i = 0; i < objects->count(); i++) {
-		auto obj = static_cast<GameObject*>(objects->objectAtIndex(i));
-		// function that I use for calculating precise object boxes
-		// auto corners = getTransformedObjectBox(obj);
-		auto corners = getObjOriginalRect(obj);
 		ccDrawLine(corners[0], corners[1]);
 		ccDrawLine(corners[1], corners[2]);
 		ccDrawLine(corners[2], corners[3]);
@@ -259,76 +247,6 @@ void SelectionLayer::draw() {
 	// calls editorUI drawSelectionThings() function on 
 	// this node, so that it affects this node
 	m_editor->drawSelectionThings(); 
-
-
 	auto selected = m_editor->getSelectedObjects();
 	drawDebugObjectBoxes(selected);
-
-
 };
-
-// not scaled nor rotated
-// (decompiled LevelEditorLayer::getObjectRect, but without rotation)
-std::array<CCPoint, 4> getObjOriginalRect(GameObject* gameObj) {
-    auto levelLayer = LevelEditorLayer::get();
-	CCRect rect;
-    *(uint8_t*) ((uint64_t) levelLayer + 0x37ad) = 0x0;
-    CCSize size;
-    if (gameObj->m_unk4ad == false) {
-        if (gameObj->m_unk4ac == true) {
-            rect = gameObj->getObjectRect();
-			goto m1;
-        }
-        if (false && gameObj->m_unk4F8 == false && (gameObj->m_colorSprite != nullptr || gameObj->m_hasCustomChild == true || gameObj->m_unk367 == true)) {
-            size = gameObj->getContentSize();
-        } else {
-            // size = CCSizeMake(
-            //     gameObj->getRScaleX() * ((CCSize*) gameObj+0x36)->width,
-            //     gameObj->getRScaleY() * ((CCSize*) gameObj+0x36)->height
-            // );
-			CCSize sz = gameObj->getContentSize() - gameObj->getOffsetPosition();
-			size = CCSizeMake(
-                gameObj->getRScaleX() * sz.width,
-                gameObj->getRScaleY() * sz.height
-            );
-			
-        }
-    } else {
-        size = CCSizeMake(
-            gameObj->getRScaleX() * gameObj->m_unk4b0.width, 
-            gameObj->getRScaleY() * gameObj->m_unk4b0.height
-        );
-    }
-
-    if (gameObj->m_unk4ad == false) {
-        // skip if statement for rotated objects
-        if (gameObj->m_isRotationAligned) {
-            std::swap(size.width, size.height);
-        }
-    }
-    // if (((gameObj->m_colorSprite == nullptr) && gameObj->m_hasCustomChild == false) || gameObj->m_unk4F8 == true) {
-    //     uVar4 = cocos2d::CCPoint::CCPoint(sizesArr56,gameObj + 0x1c4);
-    //     // GameToolbox : static TodoReturn getRelativeOffset(GameObject*, cocos2d::CCPoint)
-    //     // FUN_140063380(gameObjSizeCopy2,gameObj,uVar4);
-    //     gameObjSizeCopy2 = GameToolbox::getRelativeOffset(gameObj, uVar4); // todo: it returns ccsize
-    //     local_res18 = gameObjSizeCopy2.width;
-    // }
-    // CCPoint posPoint = gameObj->getPosition();
-    // CCPoint origin = ccp((local_res18 + posPoint.x) - size.width * 0.5,(fVar7 + local_res1c) - objRScaleY);
-    rect.origin = ccp(
-        (0 + gameObj->getPosition().x) - size.width * 0.5,
-        (0 + gameObj->getPosition().y) - size.height * 0.5
-    );
-	rect.size = size;
-
-	m1:
-	std::array<CCPoint, 4> ret;
-	ret[0] = rect.origin;
-	ret[1] = rect.origin + ccp(rect.size.width, 0);
-	ret[2] = rect.origin + rect.size;
-	ret[3] = rect.origin + ccp(0, rect.size.height);
-	return ret;
-}
-
-
-
